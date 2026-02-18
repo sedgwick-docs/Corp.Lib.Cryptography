@@ -169,6 +169,12 @@ public class FileEncryptionService(IFileService fileService)
     {
         await fileService.DecryptFileAsync(source, destination);
     }
+
+    public async Task<MemoryStream> DecryptToMemoryAsync(string source)
+    {
+        // Decrypt directly into memory without writing to disk
+        return await fileService.DecryptFileAsync(source);
+    }
 }
 ```
 
@@ -324,6 +330,87 @@ await Implementation.DecryptFileAsync(
 
 ---
 
+#### `DecryptFileAsync` to memory (single password)
+
+Decrypts a file into a `MemoryStream` instead of writing to disk. Use this when you need to process the decrypted content in memory without creating a temporary file.
+
+```csharp
+public static Task<MemoryStream> DecryptFileAsync(
+    string sourceFilePath,
+    string password,
+    CancellationToken cancellationToken = default)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `sourceFilePath` | `string` | Full path to the encrypted file |
+| `password` | `string` | The same password used during encryption |
+| `cancellationToken` | `CancellationToken` | Optional token to cancel long-running operations |
+| **Returns** | `MemoryStream` | A `MemoryStream` containing the decrypted data, positioned at the beginning |
+
+**Example:**
+```csharp
+await using var decryptedStream = await Implementation.DecryptFileAsync(
+    sourceFilePath: @"C:\Encrypted\contract.pdf.enc",
+    password: "MySecurePassword123!");
+
+// Read decrypted content directly
+using var reader = new StreamReader(decryptedStream);
+string content = await reader.ReadToEndAsync();
+
+// Or copy to another stream
+await decryptedStream.CopyToAsync(responseStream);
+
+// Or get the raw bytes
+byte[] bytes = decryptedStream.ToArray();
+```
+
+---
+
+#### `DecryptFileAsync` to memory (with password provider)
+
+Decrypts a file into a `MemoryStream` using a password provider function. Use this when you have rotated keys and need the decrypted content in memory.
+
+```csharp
+public static async Task<MemoryStream> DecryptFileAsync(
+    string sourceFilePath,
+    Func<int, string?> passwordProvider,
+    CancellationToken cancellationToken = default)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `sourceFilePath` | `string` | Full path to the encrypted file |
+| `passwordProvider` | `Func<int, string?>` | A function that receives a key version number and returns the corresponding password. Return `null` if the version is unknown |
+| `cancellationToken` | `CancellationToken` | Optional token to cancel long-running operations |
+| **Returns** | `MemoryStream` | A `MemoryStream` containing the decrypted data, positioned at the beginning |
+
+**What happens internally:**
+1. Reads the key version from the file header
+2. Calls your `passwordProvider` function with that version number
+3. Uses the returned password to derive the decryption key
+4. Decrypts and verifies the file into a `MemoryStream`
+5. Returns the stream positioned at the beginning
+
+**Example:**
+```csharp
+Func<int, string?> getPassword = version => version switch
+{
+    1 => "OldPassword2023",
+    2 => "NewPassword2024",
+    _ => null
+};
+
+await using var decryptedStream = await Implementation.DecryptFileAsync(
+    sourceFilePath: @"C:\Encrypted\contract.pdf.enc",
+    passwordProvider: getPassword);
+
+// Process the decrypted content in memory
+byte[] bytes = decryptedStream.ToArray();
+```
+
+---
+
 #### `DecryptFileAsync` (with password provider)
 
 Decrypts a file using a password provider function. Use this when you have rotated keys and different files may be encrypted with different key versions.
@@ -408,6 +495,48 @@ public static Task DecryptFileAsync(
 3. Looks up the password from `{Instance}.{Environment}.{ApplicationName}.Aes256Gcm.v{keyVersion}`
 4. Throws `CryptographicException` if the environment variable is not set
 5. Decrypts and verifies the file
+
+---
+
+#### `DecryptFileAsync` to memory (with Dependency Injection)
+
+Decrypts a file into a `MemoryStream` using passwords from environment variables. The correct password is automatically selected based on the key version stored in the file header.
+
+**Using the DI service (Recommended):**
+```csharp
+public class MyService(IFileService fileService)
+{
+    public async Task<MemoryStream> DecryptDocumentToMemoryAsync()
+    {
+        // Automatically uses the correct password based on file's key version
+        return await fileService.DecryptFileAsync(
+            sourceFilePath: @"C:\Encrypted\contract.pdf.enc");
+    }
+}
+```
+
+**Using the static method with EvPasswordSource:**
+```csharp
+public static Task<MemoryStream> DecryptFileAsync(
+    string sourceFilePath,
+    EvPasswordSource envSource,
+    CancellationToken cancellationToken = default)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `sourceFilePath` | `string` | Full path to the encrypted file |
+| `envSource` | `EvPasswordSource` | Environment variable source for password lookup |
+| `cancellationToken` | `CancellationToken` | Optional token to cancel long-running operations |
+| **Returns** | `MemoryStream` | A `MemoryStream` containing the decrypted data, positioned at the beginning |
+
+**What happens internally:**
+1. Reads configuration values: `TargetVoyagerInstance`, `TargetedVoyagerEnvironment`, `ApplicationName`, `Aes256GcmKeyVersion`
+2. Reads the key version from the file header
+3. Looks up the password from `{Instance}.{Environment}.{ApplicationName}.Aes256Gcm.v{keyVersion}`
+4. Throws `CryptographicException` if the environment variable is not set
+5. Decrypts and verifies the file into a `MemoryStream`
+6. Returns the stream positioned at the beginning
 
 ---
 
