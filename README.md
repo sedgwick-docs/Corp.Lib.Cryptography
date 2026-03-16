@@ -19,46 +19,47 @@ The `Aes` and `Argon2` classes require environment variables for key material. T
 | `encryption_string` | Password for AES-128 key derivation | `Aes.Encrypt()`, `Aes.Decrypt()` |
 | `strongencryption_string` | Password for AES-256 key derivation | `Aes.StrongEncrypt()`, `Aes.StrongDecrypt()` |
 | `knownsecret_string` | Known secret combined with user passwords for Argon2 | `Argon2.Hash()`, `Argon2.CompareHashes()` |
-| `{Instance}.{Environment}.{ApplicationName}.Aes256Gcm.v{N}` | Versioned passwords for AES-GCM file encryption | `Implementation` (with `EvPasswordSource`) |
+| `{Instance}.{Environment}.Corp.Lib.Cryptography.Aes256Gcm.v{N}` | Versioned passwords for AES-GCM file encryption (value is AES-128 encrypted) | `Implementation` (with `EvPasswordSource`) |
 
 ### AesGcmFile Environment Variable Pattern
 
 When using `EvPasswordSource`, passwords are stored in environment variables following this naming convention derived from your application's configuration:
 
 ```
-{TargetVoyagerInstance}.{TargetedVoyagerEnvironment}.{ApplicationName}.Aes256Gcm.v{KeyVersion}
+{TargetVoyagerInstance}.{TargetedVoyagerEnvironment}.Corp.Lib.Cryptography.Aes256Gcm.v{KeyVersion}
 ```
 
-The four configuration elements come from `WebApplicationBuilder.Configuration`:
+The three configuration elements come from `WebApplicationBuilder.Configuration`:
 - `TargetVoyagerInstance` - The target Voyager instance (e.g., "Production", "Staging")
 - `TargetedVoyagerEnvironment` - The target environment (e.g., "Live", "Test")
-- `ApplicationName` - Your application's name
 - `Aes256GcmKeyVersion` - The current key version for encryption (e.g., "1", "2")
+
+> **Important:** The environment variable values must be AES-128 encrypted using `Aes.Encrypt()`. The `EvPasswordSource.GetPassword()` method automatically decrypts them via `Aes.Decrypt()` before use.
 
 **Examples:**
 
-| Instance | Environment | ApplicationName | Key Version | Environment Variable Name |
-|----------|-------------|-----------------|-------------|---------------------------|
-| `Production` | `Live` | `MyApp` | 1 | `Production.Live.MyApp.Aes256Gcm.v1` |
-| `Production` | `Live` | `MyApp` | 2 | `Production.Live.MyApp.Aes256Gcm.v2` |
-| `Staging` | `Test` | `FileProcessor` | 1 | `Staging.Test.FileProcessor.Aes256Gcm.v1` |
-| `Development` | `Local` | `Corp.Api` | 3 | `Development.Local.Corp.Api.Aes256Gcm.v3` |
+| Instance | Environment | Key Version | Environment Variable Name |
+|----------|-------------|-------------|---------------------------|
+| `Production` | `Live` | 1 | `Production.Live.Corp.Lib.Cryptography.Aes256Gcm.v1` |
+| `Production` | `Live` | 2 | `Production.Live.Corp.Lib.Cryptography.Aes256Gcm.v2` |
+| `Staging` | `Test` | 1 | `Staging.Test.Corp.Lib.Cryptography.Aes256Gcm.v1` |
+| `Development` | `Local` | 3 | `Development.Local.Corp.Lib.Cryptography.Aes256Gcm.v3` |
 
 **Setting environment variables:**
 
 ```powershell
-# PowerShell (current session)
-$env:Production.Live.MyApp.Aes256Gcm.v1 = "YourSecurePassword2023"
-$env:Production.Live.MyApp.Aes256Gcm.v2 = "YourSecurePassword2024"
+# PowerShell (current session) — values must be AES-128 encrypted via Aes.Encrypt()
+$env:Production.Live.Corp.Lib.Cryptography.Aes256Gcm.v1 = "<AES-128 encrypted password>"
+$env:Production.Live.Corp.Lib.Cryptography.Aes256Gcm.v2 = "<AES-128 encrypted password>"
 
 # PowerShell (persistent for user)
-[Environment]::SetEnvironmentVariable("Production.Live.MyApp.Aes256Gcm.v1", "YourSecurePassword2023", "User")
+[Environment]::SetEnvironmentVariable("Production.Live.Corp.Lib.Cryptography.Aes256Gcm.v1", "<AES-128 encrypted password>", "User")
 
 # Command Prompt
-set Production.Live.MyApp.Aes256Gcm.v1=YourSecurePassword2023
+set Production.Live.Corp.Lib.Cryptography.Aes256Gcm.v1=<AES-128 encrypted password>
 
 # Linux/macOS
-export Production.Live.MyApp.Aes256Gcm.v1="YourSecurePassword2023"
+export Production.Live.Corp.Lib.Cryptography.Aes256Gcm.v1="<AES-128 encrypted password>"
 ```
 
 > ?? **Security Note:** For production environments, use a secrets manager (Azure Key Vault, AWS Secrets Manager, HashiCorp Vault) to inject these configurations at runtime rather than storing them in plain text.
@@ -78,7 +79,7 @@ Encrypts a string using AES-128 (128-bit key).
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `unencrypted` | `string` | The plaintext string to encrypt |
-| **Returns** | `string` | Base64-encoded ciphertext containing IV + encrypted data |
+| **Returns** | `string` | Base64-encoded ciphertext |
 
 ```csharp
 string encrypted = Aes.Encrypt("sensitive data");
@@ -106,7 +107,7 @@ Encrypts a string using AES-256 (256-bit key) for higher security requirements.
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `unencrypted` | `string` | The plaintext string to encrypt |
-| **Returns** | `string` | Base64-encoded ciphertext containing IV + encrypted data |
+| **Returns** | `string` | Base64-encoded ciphertext |
 
 ```csharp
 string encrypted = Aes.StrongEncrypt("highly sensitive data");
@@ -125,6 +126,17 @@ Decrypts a string that was encrypted with `StrongEncrypt()`.
 string decrypted = Aes.StrongDecrypt(encrypted);
 ```
 
+#### Legacy Methods (Deprecated)
+
+The following methods are marked `[Obsolete]` with a compile-time warning. They exist for backward compatibility with data encrypted by the older `Corp.DAL` library. Use the methods above for all new code.
+
+| Method | Replacement |
+|--------|-------------|
+| `Aes128Encrypt(string)` | `Encrypt(string)` |
+| `Aes128Decrypt(string)` | `Decrypt(string)` |
+| `Aes256Encrypt(string)` | `StrongEncrypt(string)` |
+| `Aes256Decrypt(string)` | `StrongDecrypt(string)` |
+
 ---
 
 ## AesGcmFile.Implementation Class
@@ -142,7 +154,7 @@ Provides file encryption using AES-256 in Galois/Counter Mode (GCM). This class 
 
 ### EvPasswordSource
 
-A type-safe wrapper for environment variable-based password lookup using configuration elements. When you use this, passwords are automatically retrieved from environment variables named `{Instance}.{Environment}.{ApplicationName}.Aes256Gcm.v{keyVersion}`.
+A type-safe wrapper for environment variable-based password lookup using configuration elements. When you use this, passwords are automatically retrieved from environment variables named `{Instance}.{Environment}.Corp.Lib.Cryptography.Aes256Gcm.v{keyVersion}`.
 
 **Using Dependency Injection (Recommended):**
 ```csharp
@@ -182,8 +194,7 @@ public class FileEncryptionService(IFileService fileService)
 ```csharp
 var envSource = new EvPasswordSource(
     Instance: "Production",
-    Environment: "Live", 
-    ApplicationName: "MyApp",
+    Environment: "Live",
     KeyVersion: 1);
 ```
 
@@ -196,11 +207,11 @@ int currentVersion = envSource.KeyVersion;
 
 // Get the environment variable name for a specific version
 string envVarName = envSource.GetEnvironmentVariableName(2);
-// Returns: "Production.Live.MyApp.Aes256Gcm.v2"
+// Returns: "Production.Live.Corp.Lib.Cryptography.Aes256Gcm.v2"
 
-// Get the password directly
+// Get the password directly (automatically decrypts the AES-128 encrypted env var value)
 string? password = envSource.GetPassword(2);
-// Returns the value of the environment variable, or null if not set
+// Returns the decrypted password, or null if not set
 ```
 
 ### Methods
@@ -275,7 +286,6 @@ public static Task EncryptFileAsync(
     string sourceFilePath,
     string destinationFilePath,
     EvPasswordSource envSource,
-    int keyVersion,
     CancellationToken cancellationToken = default)
 ```
 
@@ -284,12 +294,11 @@ public static Task EncryptFileAsync(
 | `sourceFilePath` | `string` | Full path to the file you want to encrypt |
 | `destinationFilePath` | `string` | Full path where the encrypted file will be written |
 | `envSource` | `EvPasswordSource` | Environment variable source for password lookup |
-| `keyVersion` | `int` | Version number identifying which password to use |
 | `cancellationToken` | `CancellationToken` | Optional token to cancel long-running operations |
 
 **What happens internally:**
-1. Reads configuration values: `TargetVoyagerInstance`, `TargetedVoyagerEnvironment`, `ApplicationName`, `Aes256GcmKeyVersion`
-2. Reads the password from environment variable `{Instance}.{Environment}.{ApplicationName}.Aes256Gcm.v{keyVersion}`
+1. Reads configuration values: `TargetVoyagerInstance`, `TargetedVoyagerEnvironment`, `Aes256GcmKeyVersion`
+2. Reads the password from environment variable `{Instance}.{Environment}.Corp.Lib.Cryptography.Aes256Gcm.v{keyVersion}` and decrypts it via `Aes.Decrypt()`
 3. Throws `InvalidOperationException` if the environment variable is not set
 4. Proceeds with standard encryption using the retrieved password
 
@@ -490,9 +499,9 @@ public static Task DecryptFileAsync(
 | `cancellationToken` | `CancellationToken` | Optional token to cancel long-running operations |
 
 **What happens internally:**
-1. Reads configuration values: `TargetVoyagerInstance`, `TargetedVoyagerEnvironment`, `ApplicationName`, `Aes256GcmKeyVersion`
+1. Reads configuration values: `TargetVoyagerInstance`, `TargetedVoyagerEnvironment`, `Aes256GcmKeyVersion`
 2. Reads the key version from the file header
-3. Looks up the password from `{Instance}.{Environment}.{ApplicationName}.Aes256Gcm.v{keyVersion}`
+3. Looks up the password from `{Instance}.{Environment}.Corp.Lib.Cryptography.Aes256Gcm.v{keyVersion}` and decrypts it via `Aes.Decrypt()`
 4. Throws `CryptographicException` if the environment variable is not set
 5. Decrypts and verifies the file
 
@@ -531,9 +540,9 @@ public static Task<MemoryStream> DecryptFileAsync(
 | **Returns** | `MemoryStream` | A `MemoryStream` containing the decrypted data, positioned at the beginning |
 
 **What happens internally:**
-1. Reads configuration values: `TargetVoyagerInstance`, `TargetedVoyagerEnvironment`, `ApplicationName`, `Aes256GcmKeyVersion`
+1. Reads configuration values: `TargetVoyagerInstance`, `TargetedVoyagerEnvironment`, `Aes256GcmKeyVersion`
 2. Reads the key version from the file header
-3. Looks up the password from `{Instance}.{Environment}.{ApplicationName}.Aes256Gcm.v{keyVersion}`
+3. Looks up the password from `{Instance}.{Environment}.Corp.Lib.Cryptography.Aes256Gcm.v{keyVersion}` and decrypts it via `Aes.Decrypt()`
 4. Throws `CryptographicException` if the environment variable is not set
 5. Decrypts and verifies the file into a `MemoryStream`
 6. Returns the stream positioned at the beginning
@@ -663,28 +672,27 @@ public static Task<int> ReEncryptFileAsync(
 | **Returns** | `int` | The previous key version that the file was encrypted with |
 
 **What happens internally:**
-1. Reads configuration values: `TargetVoyagerInstance`, `TargetedVoyagerEnvironment`, `ApplicationName`, `Aes256GcmKeyVersion`
+1. Reads configuration values: `TargetVoyagerInstance`, `TargetedVoyagerEnvironment`, `Aes256GcmKeyVersion`
 2. Reads the current key version from the file header
-3. Retrieves the old password from `{Instance}.{Environment}.{ApplicationName}.Aes256Gcm.v{oldVersion}`
-4. Retrieves the new password from `{Instance}.{Environment}.{ApplicationName}.Aes256Gcm.v{newKeyVersion}`
+3. Retrieves the old password from `{Instance}.{Environment}.Corp.Lib.Cryptography.Aes256Gcm.v{oldVersion}` and decrypts it via `Aes.Decrypt()`
+4. Retrieves the new password from `{Instance}.{Environment}.Corp.Lib.Cryptography.Aes256Gcm.v{newKeyVersion}` and decrypts it via `Aes.Decrypt()`
 5. Decrypts with old password, re-encrypts with new password
 
 ---
 
-#### `CreateEnvironmentPasswordProvider`
+#### `CreateEvPasswordProvider`
 
 Creates a password provider function for use with other APIs or custom workflows. Multiple overloads are available.
 
 ```csharp
 // From an existing EvPasswordSource
-public static Func<int, string?> CreateEnvironmentPasswordProvider(
+public static Func<int, string?> CreateEvPasswordProvider(
     EvPasswordSource envSource)
 
 // From individual configuration values (manual)
-public static Func<int, string?> CreateEnvironmentPasswordProvider(
+public static Func<int, string?> CreateEvPasswordProvider(
     string instance, 
     string environment, 
-    string applicationName,
     int keyVersion = 1)
 ```
 
@@ -693,17 +701,15 @@ public static Func<int, string?> CreateEnvironmentPasswordProvider(
 | `envSource` | `EvPasswordSource` | An existing environment password source |
 | `instance` | `string` | The target Voyager instance |
 | `environment` | `string` | The target Voyager environment |
-| `applicationName` | `string` | The application name |
 | `keyVersion` | `int` | The key version (defaults to 1) |
 | **Returns** | `Func<int, string?>` | A function that retrieves passwords for a given key version |
 
 **Example:**
 ```csharp
 // Create from individual values
-var passwordProvider = Implementation.CreateEnvironmentPasswordProvider(
+var passwordProvider = Implementation.CreateEvPasswordProvider(
     instance: "Production",
-    environment: "Live",
-    applicationName: "MyApp");
+    environment: "Live");
 
 // Use with the standard DecryptFileAsync overload
 await Implementation.DecryptFileAsync(
@@ -712,7 +718,7 @@ await Implementation.DecryptFileAsync(
     passwordProvider: passwordProvider);
 
 // Or use it for custom logic
-string? passwordV2 = passwordProvider(2); // Returns value of Production.Live.MyApp.Aes256Gcm.v2
+string? passwordV2 = passwordProvider(2); // Returns decrypted value of Production.Live.Corp.Lib.Cryptography.Aes256Gcm.v2
 ```
 
 ---
@@ -798,16 +804,22 @@ else
 
 ## Rijndael Class (Legacy)
 
-> ?? **Deprecated**: This class uses the obsolete `RijndaelManaged` algorithm and exists only for backward compatibility with existing encrypted data. **Do not use for new development.**
+> ⛔ **Removed**: All methods in this class are marked with `[Obsolete(..., true)]` and will cause a **compile-time error** if referenced. This class uses the obsolete `RijndaelManaged` algorithm and exists only for historical reference.
 
-Use the `Aes` class instead for all new encryption needs.
+Use the `Aes` class instead for all encryption needs.
+
+**Methods (all produce compile errors):**
+- `Rijndael.Encrypt(string data)` — AES-128 encryption
+- `Rijndael.Decrypt(string encrypted)` — AES-128 decryption
+- `Rijndael.StrongEncrypt(string data)` — AES-256 encryption
+- `Rijndael.StrongDecrypt(string encrypted)` — AES-256 decryption
 
 ```csharp
-// ? Legacy - don't use for new code
+// ❌ These will NOT compile — do not use
 string encrypted = Rijndael.Encrypt("data");
 string decrypted = Rijndael.Decrypt(encrypted);
 
-// ? Use this instead
+// ✅ Use this instead
 string encrypted = Aes.Encrypt("data");
 string decrypted = Aes.Decrypt(encrypted);
 ```
@@ -830,10 +842,10 @@ public class KeyRotationService(IFileService fileService, ILogger<KeyRotationSer
 {
     public async Task RotateAllFilesAsync(string directory, int targetVersion)
     {
-        // Ensure environment variables are configured:
-        // Production.Live.MyApp.Aes256Gcm.v1 = "Password2023"  (retired)
-        // Production.Live.MyApp.Aes256Gcm.v2 = "Password2024"  (current)
-        // Production.Live.MyApp.Aes256Gcm.v3 = "Password2025"  (new target)
+        // Ensure environment variables are configured (values are AES-128 encrypted):
+        // Production.Live.Corp.Lib.Cryptography.Aes256Gcm.v1 = "<encrypted>"  (retired)
+        // Production.Live.Corp.Lib.Cryptography.Aes256Gcm.v2 = "<encrypted>"  (current)
+        // Production.Live.Corp.Lib.Cryptography.Aes256Gcm.v3 = "<encrypted>"  (new target)
 
         var encryptedFiles = Directory.GetFiles(directory, "*.enc", SearchOption.AllDirectories);
 
@@ -894,6 +906,58 @@ foreach (var file in encryptedFiles)
 }
 
 Console.WriteLine("Key rotation complete");
+```
+
+---
+
+## Dilithium Class (Restricted)
+
+> ⛔ **Not Permitted**: This entire class is marked with `[Obsolete("Class is not permitted within Sedgwick at this time", true)]` and will cause a **compile-time error** if referenced.
+
+Provides CRYSTALS-Dilithium post-quantum digital signature operations using BouncyCastle. All methods are blocked at compile time.
+
+**Methods (all produce compile errors):**
+- `Dilithium.Encrypt(string text)` — Signs data using Dilithium3
+- `Dilithium.Verify(string text, byte[] signature)` — Verifies a Dilithium3 signature
+
+---
+
+## CrystalsKyber Class (Restricted)
+
+> ⛔ **Not Permitted**: All methods in this class are marked with `[Obsolete("Method is not permitted within Sedgwick at this time", true)]` and will cause a **compile-time error** if referenced.
+
+Placeholder for CRYSTALS-Kyber post-quantum key encapsulation. The implementation is currently stubbed out.
+
+**Methods (all produce compile errors):**
+- `CrystalsKyber.Encrypt(string text)` — Placeholder for Kyber encryption
+- `CrystalsKyber.Decrypt(string text, byte[] signature)` — Placeholder for Kyber decryption
+
+---
+
+## SecureFileDelete Class
+
+Provides PCI DSS 4.0 compliant secure file deletion by overwriting file contents before deleting. Used internally by `ReEncryptFileAsync` to securely remove temporary decrypted files.
+
+### Methods
+
+#### `DeleteAsync(string filePath, int totalPasses, CancellationToken cancellationToken)`
+
+Securely deletes a file by overwriting its contents multiple times before removing it from disk.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `filePath` | `string` | Path to the file to securely delete |
+| `totalPasses` | `int` | Number of overwrite passes (minimum enforced: 3) |
+| `cancellationToken` | `CancellationToken` | Optional token to cancel the operation |
+
+**Overwrite passes:**
+1. Pass 1: All zeros (`0x00`)
+2. Pass 2: All ones (`0xFF`)
+3. Remaining passes: Cryptographically random bytes
+
+```csharp
+// Securely delete a temporary file with 3 overwrite passes
+await SecureFileDelete.DeleteAsync(@"C:\Temp\sensitive.tmp", totalPasses: 3);
 ```
 
 ---
